@@ -1,16 +1,23 @@
 use druid::{
-    widget::{Button, Checkbox, Flex, Label, List, Padding, TextBox, ZStack},
-    Env, Menu, MenuItem, Point, UnitPoint, Widget, WidgetExt,
+    widget::{Button, Checkbox, Controller, Flex, Label, List, Padding, TextBox, ZStack},
+    Code, Color, Env, Event, Menu, MenuItem, Point, UnitPoint, Widget, WidgetExt,
 };
 
 use crate::{
     data::{TodoItem, TodoState},
     main,
+    saver::{self, Saver},
 };
 
 pub fn ui_builder() -> impl Widget<TodoState> {
     let header = Flex::row()
-        .with_flex_child(TextBox::new().lens(TodoState::new_text).expand_width(), 1.)
+        .with_flex_child(
+            TextBox::new()
+                .lens(TodoState::new_text)
+                .expand_width()
+                .controller(Enter),
+            1.,
+        )
         .with_child(
             Button::new("->").on_click(|_ctx, data: &mut TodoState, _env| {
                 if data.new_text.trim() != "" {
@@ -22,9 +29,11 @@ pub fn ui_builder() -> impl Widget<TodoState> {
                     });
                 }
             }),
-        );
+        )
+        .with_child(Saver);
 
     let todos = List::new(|| {
+        let bg = Color::rgba8(0, 0, 0, 50);
         Flex::row()
             .with_child(Checkbox::new("").lens(TodoItem::checked))
             .with_child(Label::new(|data: &TodoItem, _: &Env| data.text.clone()))
@@ -42,6 +51,7 @@ pub fn ui_builder() -> impl Widget<TodoState> {
                     ctx.show_context_menu(menu, Point::new(0., 0.))
                 }),
             )
+            .background(bg)
     })
     .lens(TodoState::todos)
     .scroll()
@@ -52,4 +62,52 @@ pub fn ui_builder() -> impl Widget<TodoState> {
     ZStack::new(base).with_aligned_child(Padding::new(5., clear_comp), UnitPoint::BOTTOM_RIGHT)
 
     // Label::new("Hello")
+}
+
+struct Enter;
+impl<W: Widget<TodoState>> Controller<TodoState, W> for Enter {
+    fn event(
+        &mut self,
+        child: &mut W,
+        ctx: &mut druid::EventCtx,
+        event: &druid::Event,
+        data: &mut TodoState,
+        env: &Env,
+    ) {
+        if let Event::KeyUp(key) = event {
+            if key.code == Code::Enter {
+                if data.new_text.trim() != "" {
+                    let text = data.new_text.clone();
+                    data.new_text = "".to_string();
+                    data.todos.push_front(TodoItem {
+                        checked: false,
+                        text,
+                    });
+                }
+            }
+        }
+        child.event(ctx, event, data, env)
+    }
+
+    fn lifecycle(
+        &mut self,
+        child: &mut W,
+        ctx: &mut druid::LifeCycleCtx,
+        event: &druid::LifeCycle,
+        data: &TodoState,
+        env: &Env,
+    ) {
+        child.lifecycle(ctx, event, data, env)
+    }
+
+    fn update(
+        &mut self,
+        child: &mut W,
+        ctx: &mut druid::UpdateCtx,
+        old_data: &TodoState,
+        data: &TodoState,
+        env: &Env,
+    ) {
+        child.update(ctx, old_data, data, env)
+    }
 }
